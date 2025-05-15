@@ -33,9 +33,9 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-30">
+    <div className="min-h-screen bg-gray-50 pt-20">
       {userRoles.length > 1 && (
-        <div className="container mx-auto px-4 mb-8">
+        <div className="container mx-auto px-4 mb-8 mt-20">
           <div className="flex justify-center space-x-4">
             {userRoles.map((role) => (
               <button
