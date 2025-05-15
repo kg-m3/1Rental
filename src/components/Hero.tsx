@@ -30,10 +30,11 @@ const Hero = () => {
           </span>{' '}
           <br />
           <span className="inline-block transform transition-transform duration-700 ease-in-out hover:scale-105">
-            <img
+            {/* <img
               src="/src/assests/img/OR_logo-small.png"
               className="h-14 md:h-10"
-            />
+            /> */}
+            Build With OneRental
           </span>
         </h1>
         <p className="text-xl md:text-2xl text-gray-200 mb-10 max-w-3xl mx-auto">
