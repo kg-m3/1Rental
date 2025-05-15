@@ -30,7 +30,8 @@ const Auth = () => {
       }
       navigate('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Auth error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred during authentication');
     } finally {
       setLoading(false);
     }
@@ -152,7 +153,11 @@ const Auth = () => {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => setIsSignIn(!isSignIn)}
+              onClick={() => {
+                setIsSignIn(!isSignIn);
+                setError('');
+                setSelectedRoles([]);
+              }}
               className="text-sm text-yellow-600 hover:text-yellow-500"
             >
               {isSignIn ? 'Need an account? Sign up' : 'Already have an account? Sign in'}

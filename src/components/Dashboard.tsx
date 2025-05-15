@@ -6,7 +6,7 @@ import RenterDashboard from './dashboard/RenterDashboard';
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, userRoles } = useAuthStore();
+  const { user, userRoles, fetchUserRoles } = useAuthStore();
   const [activeRole, setActiveRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -15,10 +15,18 @@ const Dashboard = () => {
       return;
     }
 
-    if (userRoles.length > 0 && !activeRole) {
-      setActiveRole(userRoles[0]);
-    }
-  }, [user, userRoles, activeRole, navigate]);
+    const initializeDashboard = async () => {
+      if (user && !userRoles.length) {
+        await fetchUserRoles(user.id);
+      }
+      
+      if (userRoles.length > 0 && !activeRole) {
+        setActiveRole(userRoles[0]);
+      }
+    };
+
+    initializeDashboard();
+  }, [user, userRoles, activeRole, navigate, fetchUserRoles]);
 
   if (!user || !activeRole) {
     return null;
