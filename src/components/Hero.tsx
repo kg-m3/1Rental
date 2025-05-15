@@ -32,7 +32,7 @@ const Hero = () => {
           <span className="inline-block transform transition-transform duration-700 ease-in-out hover:scale-105">
             <img
               src="/src/assests/img/OR_logo-small.png"
-              className="h-30 md:h-10"
+              className="h-30 md:h-30"
             />
            
           </span>
