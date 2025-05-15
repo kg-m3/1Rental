@@ -22,6 +22,7 @@ import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import OwnerDashboard from './components/dashboard/OwnerDashboard';
 import RenterDashboard from './components/dashboard/RenterDashboard';
+import Profile from './components/Profile';
 
 function App() {
   const { setUser, fetchUserRoles } = useAuthStore();
@@ -74,6 +75,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/renterdashboard" element={<RenterDashboard />} />
           <Route path="/ownerdashboard" element={<OwnerDashboard />} />
+          <Route path="/profile" element={<Profile />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Footer />

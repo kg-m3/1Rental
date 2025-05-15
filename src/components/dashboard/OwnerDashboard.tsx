@@ -9,10 +9,16 @@ import {
   XCircle,
   Plus,
   Settings,
+  User,
+  Edit,
+  Power,
+  Eye,
+  Calendar as CalendarIcon,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 const OwnerDashboard = () => {
+  const [activeTab, setActiveTab] = useState('equipment');
   const [equipment, setEquipment] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [stats, setStats] = useState({
@@ -26,49 +32,293 @@ const OwnerDashboard = () => {
   }, []);
 
   const fetchOwnerData = async () => {
-    // Fetch equipment
-    const { data: equipmentData } = await supabase
-      .from('equipment')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      // Fetch equipment
+      const { data: equipmentData, error: equipmentError } = await supabase
+        .from('equipment')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (equipmentData) {
-      setEquipment(equipmentData);
-      setStats(prev => ({ ...prev, totalEquipment: equipmentData.length }));
-    }
+      if (equipmentError) throw equipmentError;
 
-    // Fetch bookings
-    const { data: bookingsData } = await supabase
-      .from('bookings')
-      .select(`
-        *,
-        equipment:equipment_id (title)
-      `)
-      .order('created_at', { ascending: false });
+      if (equipmentData) {
+        setEquipment(equipmentData);
+        setStats(prev => ({ ...prev, totalEquipment: equipmentData.length }));
+      }
 
-    if (bookingsData) {
-      setBookings(bookingsData);
-      const activeBookings = bookingsData.filter(b => b.status === 'active').length;
-      const totalEarnings = bookingsData
-        .filter(b => b.status === 'completed')
-        .reduce((sum, b) => sum + b.total_amount, 0);
-      
-      setStats(prev => ({
-        ...prev,
-        activeBookings,
-        totalEarnings,
-      }));
+      // Fetch bookings with equipment and user details
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          equipment:equipment_id (*),
+          profiles:user_id (email)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (bookingsError) throw bookingsError;
+
+      if (bookingsData) {
+        setBookings(bookingsData);
+        const activeBookings = bookingsData.filter(b => b.status === 'active').length;
+        const totalEarnings = bookingsData
+          .filter(b => b.status === 'completed')
+          .reduce((sum, b) => sum + (b.total_amount || 0), 0);
+        
+        setStats(prev => ({
+          ...prev,
+          activeBookings,
+          totalEarnings,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching owner data:', error);
     }
   };
 
   const handleBookingAction = async (bookingId: string, action: 'approve' | 'reject') => {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status: action === 'approve' ? 'active' : 'rejected' })
-      .eq('id', bookingId);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ 
+          status: action === 'approve' ? 'active' : 'rejected',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', bookingId);
 
-    if (!error) {
-      fetchOwnerData();
+      if (error) throw error;
+      await fetchOwnerData();
+    } catch (error) {
+      console.error('Error updating booking:', error);
+    }
+  };
+
+  const handleEquipmentStatus = async (equipmentId: string, status: string) => {
+    try {
+      const { error } = await supabase
+        .from('equipment')
+        .update({ 
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', equipmentId);
+
+      if (error) throw error;
+      await fetchOwnerData();
+    } catch (error) {
+      console.error('Error updating equipment status:', error);
+    }
+  };
+
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'equipment':
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold">My Equipment</h2>
+              <Link
+                to="/list-equipment"
+                className="flex items-center px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Add New Equipment
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {equipment.map((item: any) => (
+                <div key={item.id} className="bg-white rounded-lg shadow-md overflow-hidden">
+                  <img
+                    src={item.image_url || 'https://images.pexels.com/photos/2058128/pexels-photo-2058128.jpeg?auto=compress&cs=tinysrgb&w=1600'}
+                    alt={item.title}
+                    className="w-full h-48 object-cover"
+                  />
+                  <div className="p-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-semibold text-lg">{item.title}</h3>
+                        <p className="text-sm text-gray-500">{item.type}</p>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-sm ${
+                        item.status === 'available'
+                          ? 'bg-green-100 text-green-800'
+                          : item.status === 'maintenance'
+                          ? 'bg-orange-100 text-orange-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <p className="text-lg font-semibold text-green-600 mb-4">
+                      R{item.rate}/day
+                    </p>
+                    <div className="flex justify-between items-center">
+                      <div className="space-x-2">
+                        <button
+                          onClick={() => handleEquipmentStatus(item.id, item.status === 'available' ? 'maintenance' : 'available')}
+                          className="p-2 text-gray-600 hover:text-yellow-600 transition-colors"
+                          title={item.status === 'available' ? 'Mark as Maintenance' : 'Mark as Available'}
+                        >
+                          <Power className="h-5 w-5" />
+                        </button>
+                        <Link
+                          to={`/equipment/${item.id}/edit`}
+                          className="p-2 text-gray-600 hover:text-yellow-600 transition-colors"
+                          title="Edit Equipment"
+                        >
+                          <Edit className="h-5 w-5" />
+                        </Link>
+                        <Link
+                          to={`/equipment/${item.id}`}
+                          className="p-2 text-gray-600 hover:text-yellow-600 transition-colors"
+                          title="View Details"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'requests':
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold">Rental Requests</h2>
+              <div className="flex space-x-2">
+                <select
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  onChange={(e) => {
+                    // Add filter logic here
+                  }}
+                >
+                  <option value="all">All Requests</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="declined">Declined</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md overflow-hidden">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Renter
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Equipment
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Dates
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {bookings.map((booking: any) => (
+                    <tr key={booking.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <User className="h-10 w-10 text-gray-400" />
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900">
+                              {booking.profiles?.email}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">{booking.equipment?.title}</div>
+                        <div className="text-sm text-gray-500">{booking.equipment?.type}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-900">
+                          {new Date(booking.start_date).toLocaleDateString()} - {new Date(booking.end_date).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          booking.status === 'pending'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : booking.status === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {booking.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        {booking.status === 'pending' && (
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleBookingAction(booking.id, 'approve')}
+                              className="text-green-600 hover:text-green-900"
+                            >
+                              <CheckCircle className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => handleBookingAction(booking.id, 'reject')}
+                              className="text-red-600 hover:text-red-900"
+                            >
+                              <XCircle className="h-5 w-5" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+
+      case 'calendar':
+        return (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold">Calendar View</h2>
+              <div className="flex space-x-2">
+                <select
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  onChange={(e) => {
+                    // Add equipment filter logic here
+                  }}
+                >
+                  <option value="all">All Equipment</option>
+                  {equipment.map((item: any) => (
+                    <option key={item.id} value={item.id}>{item.title}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-md p-6">
+              {/* Calendar implementation will go here */}
+              <div className="text-center text-gray-500">
+                <CalendarIcon className="h-16 w-16 mx-auto mb-4" />
+                <p>Calendar view coming soon...</p>
+              </div>
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
     }
   };
 
@@ -107,98 +357,45 @@ const OwnerDashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Equipment List */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold">Your Equipment</h2>
-            <Link
-              to="/list-equipment"
-              className="flex items-center text-yellow-600 hover:text-yellow-700"
-            >
-              <Plus className="h-5 w-5 mr-1" />
-              Add New
-            </Link>
-          </div>
-
-          <div className="space-y-4">
-            {equipment.map((item: any) => (
-              <div key={item.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold">{item.title}</h3>
-                    <p className="text-sm text-gray-500">{item.location}</p>
-                  </div>
-                  <span className="text-green-600 font-semibold">
-                    R{item.rate}/day
-                  </span>
-                </div>
-                <div className="flex justify-between items-center mt-4">
-                  <span className={`px-2 py-1 rounded-full text-sm ${
-                    item.status === 'available'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {item.status}
-                  </span>
-                  <Link
-                    to={`/equipment/${item.id}/edit`}
-                    className="text-gray-600 hover:text-yellow-600"
-                  >
-                    <Settings className="h-5 w-5" />
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Navigation Tabs */}
+      <div className="bg-white rounded-lg shadow-md mb-8">
+        <div className="flex border-b">
+          <button
+            className={`px-6 py-3 text-sm font-medium ${
+              activeTab === 'equipment'
+                ? 'border-b-2 border-yellow-600 text-yellow-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setActiveTab('equipment')}
+          >
+            Equipment
+          </button>
+          <button
+            className={`px-6 py-3 text-sm font-medium ${
+              activeTab === 'requests'
+                ? 'border-b-2 border-yellow-600 text-yellow-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setActiveTab('requests')}
+          >
+            Rental Requests
+          </button>
+          <button
+            className={`px-6 py-3 text-sm font-medium ${
+              activeTab === 'calendar'
+                ? 'border-b-2 border-yellow-600 text-yellow-600'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+            onClick={() => setActiveTab('calendar')}
+          >
+            Calendar
+          </button>
         </div>
+      </div>
 
-        {/* Booking Requests */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-bold mb-6">Recent Booking Requests</h2>
-          <div className="space-y-4">
-            {bookings.map((booking: any) => (
-              <div key={booking.id} className="border rounded-lg p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-semibold">{booking.equipment?.title}</h3>
-                    <p className="text-sm text-gray-500">
-                      {new Date(booking.start_date).toLocaleDateString()} - {new Date(booking.end_date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <span className={`px-2 py-1 rounded-full text-sm ${
-                    booking.status === 'pending'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : booking.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {booking.status}
-                  </span>
-                </div>
-
-                {booking.status === 'pending' && (
-                  <div className="flex justify-end space-x-2 mt-4">
-                    <button
-                      onClick={() => handleBookingAction(booking.id, 'approve')}
-                      className="flex items-center px-3 py-1 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleBookingAction(booking.id, 'reject')}
-                      className="flex items-center px-3 py-1 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700"
-                    >
-                      <XCircle className="h-4 w-4 mr-1" />
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Tab Content */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        {renderTabContent()}
       </div>
     </div>
   );
