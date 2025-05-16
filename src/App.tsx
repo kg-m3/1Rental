@@ -28,22 +28,23 @@ function App() {
   const { setUser, fetchUserRoles } = useAuthStore();
 
   useEffect(() => {
-    const checkUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      console.log('user ', data?.user);
-      console.log('error ', error);
-    };
-    checkUser();
-    console.log('user ', setUser);
     // Set up auth state listener
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
 
       if (currentUser) {
         await fetchUserRoles(currentUser.id);
+      }
+    });
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      
+      if (currentUser) {
+        fetchUserRoles(currentUser.id);
       }
     });
 
@@ -83,4 +84,5 @@ function App() {
     </Router>
   );
 }
+
 export default App;

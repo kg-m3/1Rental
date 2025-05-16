@@ -18,7 +18,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   userRoles: [],
-  isLoading: true,
+  isLoading: false,
   setUser: (user) => set({ user }),
   setUserRoles: (roles) => set({ userRoles: roles }),
   setIsLoading: (loading) => set({ isLoading: loading }),
@@ -36,6 +36,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
     } catch (error) {
       console.error('Error fetching user roles:', error);
+      set({ userRoles: [] });
     }
   },
 
@@ -63,18 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   signUp: async (email, password, roles) => {
     set({ isLoading: true });
     try {
-      // First check if the user already exists
-      const { data: existingUser } = await supabase
-        .from('user_profiles')
-        .select('email')
-        .eq('email', email)
-        .single();
-
-      if (existingUser) {
-        throw new Error('An account with this email already exists. Please sign in instead.');
-      }
-
-      // Proceed with signup if user doesn't exist
+      // First sign up the user
       const { data: { user }, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -83,38 +73,33 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (signUpError) throw signUpError;
       if (!user) throw new Error('Signup failed');
 
-      // Wait a moment for the auth user to be fully created
+      // Wait for auth to complete
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Create user profile using service role client to bypass RLS
+      // Create user profile
       const { error: profileError } = await supabase
         .from('user_profiles')
         .insert([{ 
-          user_id: user.id, 
+          user_id: user.id,
           email,
           created_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
+        }]);
 
-      if (profileError) {
-        // If profile creation fails, we should clean up the auth user
-        await supabase.auth.admin.deleteUser(user.id);
-        throw new Error('Failed to create user profile. Please try again.');
-      }
+      if (profileError) throw profileError;
 
-      // Insert user roles
-      const rolePromises = roles.map(role => 
-        supabase
+      // Create user roles
+      for (const role of roles) {
+        const { error: roleError } = await supabase
           .from('user_roles')
-          .insert([{ 
-            user_id: user.id, 
+          .insert([{
+            user_id: user.id,
             role,
             created_at: new Date().toISOString()
-          }])
-      );
+          }]);
 
-      await Promise.all(rolePromises);
+        if (roleError) throw roleError;
+      }
+
       set({ user, userRoles: roles });
     } catch (error) {
       console.error('Sign up error:', error);
